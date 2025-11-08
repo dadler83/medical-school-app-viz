@@ -243,6 +243,7 @@ class CanadaMapVisualization {
                 } else if (vis.click_callback !== null) {
                     vis.click_callback([]);
                 }
+                document.getElementById("school-vis").style.display = "block";
                 document.getElementById("school-vis").scrollIntoView({ behavior: 'smooth' });
             })
             .transition()
