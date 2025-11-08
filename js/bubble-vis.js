@@ -242,7 +242,7 @@ function updateSchoolInfo(schoolData) {
         mcatElement.style.color = "red";
     }
 
-    if (sectionScores.length === 0 || isNaN(sectionScores[0])) {
+    if (sectionScores.length === 0 || (isNaN(sectionScores[0]) && sectionScores.length === 1)) {
         mcatElement.innerText = "No MCAT Requirements";
     } else if (sectionScores.length === 1) {
         mcatElement.innerText = `Section Total must be at least ${sectionScores[0]}`;
@@ -278,6 +278,10 @@ function updateSchoolInfo(schoolData) {
         gpaElement.style.color = "deepskyblue";
     } else {
         gpaElement.style.color = "red";
+    }
+
+    if (gpa > 80) {
+        gpa = 3.7;
     }
     gpaElement.innerText = `${gpa}`
     if (isNaN(gpa)) {
