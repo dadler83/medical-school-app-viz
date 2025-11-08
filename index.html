@@ -11,68 +11,157 @@
 
     <!-- YOUR CSS -->
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/map-style.css">
 
 </head>
 <body>
 
-<div class="container">
+<!-- Topbar -->
+<header class="topbar">
+    <button id="sidebarToggle" class="toggle-btn" aria-label="Toggle sidebar" aria-expanded="true">
+        ☰
+    </button>
+    <h1 class="site-title">MD Applicants</h1>
+</header>
 
-    <h1>Canadian Medical Schools</h1>
-    <br>
+<div class="app">
+    <aside id="sidebar" class="sidebar" aria-label="Main form">
+        <div class="sidebar-header">
+            <div class="brand" aria-hidden="true">
+                <span class="brand-icon">
+                    <img style="width: 100%; height: 100%;" src="/images/Star_of_life2.png">
+                </span>
+                <span class="brand-text">Candidate Information</span>
+            </div>
+            <!-- keep arrow visible even when collapsed -->
+            <button id="collapseBtn" class="collapse-btn" aria-label="Collapse sidebar" aria-expanded="true">◀</button>
+        </div>
+
+        <form id="sidebarForm" class="sidebar-form" novalidate>
+            <h3>General Information</h3>
+
+            <div class="col-auto">
+                <input type="checkbox" id="canadian-citizen" value="yes" style="display: inline">
+                <label for="canadian-citizen" class="form-check-label" style="display: inline">Canadian Citizen or Permanent Resident</label>
+
+                <br>
+                <input type="checkbox" id="taken-casper" value="yes">
+                <label for="taken-casper" class="form-check-label">Taken CASPER</label>
+                <div style="margin-bottom: 1em;"></div>
+
+                <div class="row g-4">
+                    <h3>Best MCAT Score</h3>
+                    <div class="col-auto">
+                        <label for="Chem/Phys" class="form-label">Chem/Phys</label>
+                        <input type="number" id="Chem/Phys" min="118" max="132" placeholder="118" class="form-control">
+                    </div>
+                    <div class="col-auto">
+                        <label for="Bio/Biochem" class="form-label">Bio/Biochem</label>
+                        <input type="number" id="Bio/Biochem" min="118" max="132" placeholder="118" class="form-control">
+                    </div>
+                    <div class="col-auto">
+                        <label for="Psych/Soc" class="form-label">Psych/Soc</label>
+                        <input type="number" id="Psych/Soc" min="118" max="132" placeholder="118" class="form-control">
+                    </div>
+                    <div class="col-auto">
+                        <label for="CARS" class="form-label">CARS</label>
+                        <input type="number" id="CARS" min="118" max="132" placeholder="118" class="form-control">
+                    </div>
+                </div>
+                <div style="margin-bottom: 2em;"></div>
+
+                <h3>Cumulative GPA</h3>
+                <input type="range" min="0" step="0.1" max="4.0" value="3.3" id="gpa-slider" style="width: 90%">
+                <label for="gpa-slider" id="gpa-slider-label">3.3</label>
+                <br>
+            </div>
+
+        </form>
+
+        <div class="sidebar-footer">
+            <small>Data for visualizations found <a href="./data/med-data-sheet.csv">here</a> </small>
+        </div>
+    </aside>
+
+    <!-- Overlay for small screens -->
+    <div id="overlay" class="overlay" hidden></div>
 
 
-    <form class="row g-3">
-        <h3>Candidate Information</h3>
+    <!-- Main content -->
+    <main class="content" id="mainContent" tabindex="-1">
+        <div class="container">
 
-        <div class="col-auto">
-            <input type="checkbox" id="canadian-citizen" value="yes">
-            <label for="canadian-citizen" class="form-check-label">Canadian Citizen or Permanent Resident</label>
+            <h1>Canadian Medical Schools</h1>
+            Fill in your candidacy information on the left to see what opportunities are available to you.
+            <br>
 
             <br>
-            <input type="checkbox" id="taken-casper" value="yes">
-            <label for="taken-casper" class="form-check-label">Taken CASPER</label>
+            <h2>How many schools am I qualified to Apply for?</h2>
 
-            <div class="row g-4">
-                <h4>Best MCAT Score</h4>
-                <div class="col-auto">
-                    <label for="Chem/Phys" class="form-label">Chem/Phys</label>
-                    <input type="number" id="Chem/Phys" class="form-control">
+            <!-- Parent container for the visualization -->
+            <div class="row justify-content-center" style="height: 30vh">
+                <div id="chart-area" style="height: 100%; width: 100%"></div>
+            </div>
+<!--            <h6>Candidate Is Eligible For The Following Medical Programs</h6>-->
+<!--            <div id="eligible-schools"></div>-->
+            <div style="height: 10vh;"></div>
+
+
+            <!--  Map vis   -->
+            <h2>Where Can I apply?</h2>
+            Click for more information about schools in an area!
+
+            <div id="map-vis-container">
+                <div id="map-container">
+                    <!-- Controls added for zoom/pan -->
+                    <div id="map-controls" aria-label="Map controls">
+                        <button id="zoom-in" title="Zoom in">+</button>
+                        <button id="zoom-out" title="Zoom out">−</button>
+                        <button id="reset" title="Reset zoom">Reset</button>
+                    </div>
+
+                    <svg id="map" role="img" aria-label="Canada provinces map"></svg>
+
                 </div>
-                <div class="col-auto">
-                    <label for="Bio/Biochem" class="form-label">Bio/Biochem</label>
-                    <input type="number" id="Bio/Biochem" class="form-control">
+
+                <div class="col-5" id="legend-wrapper">
+                    <div>Percentage of Schools Applicant Can Apply to:</div>
+                    <div id="legend"></div>
                 </div>
-                <div class="col-auto">
-                    <label for="Psych/Soc" class="form-label">Psych/Soc</label>
-                    <input type="number" id="Psych/Soc" class="form-control">
-                </div>
-                <div class="col-auto">
-                    <label for="CARS" class="form-label">CARS</label>
-                    <input type="number" id="CARS" class="form-control">
+
+                <div style="height: 10vh;"></div>
+                <div style="width: 100%; height: 100vh;" id="school-vis">
                 </div>
             </div>
 
-            <h4>Cumulative GPA</h4>
-            <input type="range" min="0" step="0.1" max="4.0" value="3.3" id="gpa-slider" style="width: 90%">
-            <label for="gpa-slider" id="gpa-slider-label">3.3</label>
-            <br>
+            <!-- optional HTML tooltip kept for backwards compatibility -->
+            <div id="tooltip" class="hidden"></div>
 
-            <button type="button" id="submit-info">Submit Candidate Information</button>
+            <div style="height: 10vh;"></div>
+            <div id="school-info">
+                <h1><span id="school-name">School Information</span> | <span id="canApply" style="color: red">Cannot apply</span></h1>
+                <br>
+                <h4>Minimum MCAT Requirement: <span id="mcat" style="color: red">Cannot apply</span></h4>
+                <div id="sectionRequirements">
+                    <h5>Chem/Phys: <span id="sectionRequirements0" style="color: red">Cannot apply</span></h5>
+                    <h5>Bio/Biochem: <span id="sectionRequirements1" style="color: red">Cannot apply</span></h5>
+                    <h5>Psych/Soc: <span id="sectionRequirements2" style="color: red">Cannot apply</span></h5>
+                    <h5>CARS: <span id="sectionRequirements3" style="color: red">Cannot apply</span></h5>
+                </div>
+                <br>
+                <h4>Minimum GPA Requirement: <span id="gpa" style="color: red">Cannot apply</span></h4>
+                <br>
+                <h4>Residency Requirement: <span id="residency" style="color: red">Cannot apply</span></h4>
+                <br>
+                <h4>Requires you to take the CASPER: <span id="casper" style="color: red">Cannot apply</span></h4>
+                CASPER is a standardized aptitude test that some schools require.
+                <br>
+            </div>
+
         </div>
-
-    </form>
-
-    <br>
-    <h2>What schools can I apply to?</h2>
-
-    <!-- Parent container for the visualization -->
-    <div class="row justify-content-center" style="height: 30vh">
-        <div id="chart-area" style="height: 100%; width: 100%"></div>
-    </div>
-    <h6>Candidate Is Eligible For The Following Medical Programs</h6>
-    <div id="eligible-schools"></div>
-
+    </main>
 </div>
+
 
 <!-- embedding JS libraries -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/js/bootstrap.bundle.min.js"
@@ -85,6 +174,9 @@
 <!-- Your implementation -->
 <script src="js/bar-chart-vis.js"></script>
 <script src="js/main.js"></script>
+<script src="js/map-vis.js"></script>
+<script src="js/parsing-util.js"></script>
+<script src="js/bubble-vis.js"></script>
 
 </body>
 </html>

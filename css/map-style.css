@@ -1,0 +1,111 @@
+
+#map-container {
+    position: relative;
+    max-width: 1200px;
+    /*display: flex;*/
+}
+
+/* Make svg fill container */
+svg#map {
+    width: 100%;
+    height: 70vh;
+    display: block;
+    touch-action: none; /* allow panning on touch devices */
+}
+
+/* Controls (zoom/pan) */
+#map-controls {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 10;
+}
+
+#map-controls button {
+    width: 44px;
+    height: 36px;
+    border-radius: 6px;
+    border: 1px solid #d0d6da;
+    background: white;
+    color: #222;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+
+#map-controls button:hover {
+    background: #f0f4f7;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+#map-controls button:active {
+    transform: translateY(1px);
+}
+
+/* Ensure borders don't scale on zoom */
+.provinces path {
+    vector-effect: non-scaling-stroke;
+}
+
+/* SVG tooltip styles */
+.svg-tooltip-bg {
+    fill: white;
+    stroke: #bbb;
+    opacity: 0.95;
+    filter: drop-shadow(0 2px 8px rgba(0,0,0,0.12));
+}
+.svg-tooltip-text {
+    font-size: 13px;
+    fill: #111;
+    pointer-events: none;
+}
+
+/* tooltip (HTML) - left in case you want to use it elsewhere; SVG tooltip will be used now */
+#tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: white;
+    border: 1px solid #bbb;
+    padding: 6px 8px;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    font-size: 13px;
+    color: #111;
+}
+
+.hidden {
+    display: none;
+}
+
+/* legend */
+#legend {
+    margin-top: 8px;
+    font-size: 13px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+#legend-wrapper {
+    border: 1px solid #bbb;
+    padding: 5px;
+    border-radius: 4px;
+}
+
+.legend-item {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.legend-swatch {
+    width: 28px;
+    height: 14px;
+    border: 1px solid #ddd;
+}
