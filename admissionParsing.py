@@ -67,7 +67,7 @@ def replace_image_with_text(input_pdf, output_pdf, image_name, replacement_text,
         print(f"❌ Error: {e}")
 
 
-def replace_images_with_text_at_location(input_pdf, output_pdf, replacement_text="(Image removed)"):
+def replace_images_with_text_at_location(input_pdf, output_pdf):
     """
     Detects images in a PDF, gets their positions, removes them, and replaces them with text.
     Works with PyPDF2 3.x+.
@@ -141,10 +141,13 @@ def replace_images_with_text_at_location(input_pdf, output_pdf, replacement_text
 
                     uid = hash_to_uid[img_hash]
 
+                    # Not Required (red img)
                     if uid in {6, 11}:
                         uid = "No"
+                    # Required (green img)
                     elif uid in {10, 9}:
                         uid = "Yes"
+                    # Case-by-case (yellow img)
                     elif uid in {7, 8, 12}:
                         uid = "Depends"
 
@@ -200,21 +203,9 @@ def replace_images_with_text_at_location(input_pdf, output_pdf, replacement_text
         print(f"❌ Error: {e}")
 
 
-
-# # Example usage
-# replace_image_with_text(
-#     input_pdf="input.pdf",
-#     output_pdf="output.pdf",
-#     image_name="/Im0",  # You must know the image XObject name
-#     replacement_text="This was an image",
-#     x=150,
-#     y=400
-# )
-
-
-def text_extraction_example():
+def text_extraction_example(pdf_name):
     # Open the PDF file
-    with open('MSAR002 - MSAR Premed Course Requirements.pdf', 'rb') as pdf_file:
+    with open(pdf_name, 'rb') as pdf_file:
         pdf_reader = PyPDF2.PdfReader(pdf_file)
 
         # Extract text from the first page
@@ -224,13 +215,16 @@ def text_extraction_example():
 
 
 if __name__ == '__main__':
-    with open('MSAR002 - MSAR Premed Course Requirements.pdf', 'rb') as pdf_file:
-        pdf_reader = PyPDF2.PdfReader(pdf_file)
-        page = pdf_reader.pages[1]
-        resources = page.get("/Resources")
-        xobjects = resources.get("/XObject")
-        print(xobjects)
+    # with open('MSAR002 - MSAR Premed Course Requirements.pdf', 'rb') as pdf_file:
+    #     pdf_reader = PyPDF2.PdfReader(pdf_file)
+    #     page = pdf_reader.pages[1]
+    #     resources = page.get("/Resources")
+    #     xobjects = resources.get("/XObject")
+    #     print(xobjects)
+
+    # make new pdf
     replace_images_with_text_at_location(
         input_pdf="MSAR002 - MSAR Premed Course Requirements.pdf",
         output_pdf="output.pdf"
     )
+    text_extraction_example("output.pdf")
