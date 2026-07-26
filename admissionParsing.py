@@ -1,10 +1,44 @@
 import hashlib
+import json
+import argparse
+from datetime import datetime, timezone
+from pathlib import Path
 
 import PyPDF2
 
 import re
 from PyPDF2 import PdfReader, PdfWriter
 from PyPDF2.generic import NameObject, TextStringObject, DecodedStreamObject
+
+
+US_STATE_CODES = {
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+    "DC", "PR",
+}
+
+CANADA_PROVINCE_CODES = {
+    "AB", "BC", "MB", "NB", "NL", "NS", "NT", "NU", "ON", "PE", "QC", "SK", "YT",
+}
+
+LOCATION_CODES = US_STATE_CODES | CANADA_PROVINCE_CODES
+COUNTRY_MARKERS = {"USA", "CAN"}
+
+HEADER_EXACT = {
+    "USA", "CAN", "State", "Medical School", "Course", "Class", "Required or",
+    "Recommended?", "Additional Info", "Credit", "Hours", "Lab?", "Pass",
+    "/Fail", "AP", "Online", "Communit", ": No",
+    ": Case-by-Case", ": Yes",
+}
+
+REQUIREMENT_LEVELS = {"Required", "Recommended"}
+SCHOOL_NAME_KEYWORDS = {
+    "school", "college", "university", "medicine", "medical", "health",
+    "sciences", "institute", "program", "faculty", "campus",
+}
 
 
 def replace_image_with_text(input_pdf, output_pdf, image_name, replacement_text, x=100, y=500):
@@ -214,17 +248,332 @@ def text_extraction_example(pdf_name):
         print(text)
 
 
-if __name__ == '__main__':
-    # with open('MSAR002 - MSAR Premed Course Requirements.pdf', 'rb') as pdf_file:
-    #     pdf_reader = PyPDF2.PdfReader(pdf_file)
-    #     page = pdf_reader.pages[1]
-    #     resources = page.get("/Resources")
-    #     xobjects = resources.get("/XObject")
-    #     print(xobjects)
+def slugify_school_name(name):
+    slug = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+    return slug or "unknown_school"
 
-    # make new pdf
-    replace_images_with_text_at_location(
-        input_pdf="MSAR002 - MSAR Premed Course Requirements.pdf",
-        output_pdf="output.pdf"
+
+def clean_page_lines(raw_text):
+    lines = []
+    for raw in raw_text.splitlines():
+        line = re.sub(r"\s+", " ", raw).strip()
+        if not line:
+            continue
+        if line in HEADER_EXACT:
+            continue
+        if line.startswith("\u00a9"):
+            continue
+        if "Association of American Medical Colleges" in line:
+            continue
+        if "and distributed with attribution for individual, educational, and noncommercial purposes only." in line:
+            continue
+        if line in {"2025", "2026", "\ufffd"}:
+            continue
+        if set(line) == {"\ufffd"}:
+            continue
+        if "Medical School Admission Requirements" in line:
+            continue
+        if "Premed Course Requirements" in line:
+            continue
+        lines.append(line)
+    return lines
+
+
+def is_noise_line(line):
+    lowered = line.lower()
+    if "association of american medical colleges" in lowered:
+        return True
+    if "and distributed with attribution" in lowered:
+        return True
+    if "noncommercial purposes only" in lowered:
+        return True
+
+    replacement_char_count = line.count("\ufffd")
+    if replacement_char_count >= 3:
+        return True
+
+    # Remove lines that are mostly punctuation/symbol debris.
+    alnum_count = sum(1 for c in line if c.isalnum())
+    if alnum_count == 0:
+        return True
+
+    return False
+
+
+def is_class_code(line):
+    return bool(re.fullmatch(r"[A-Z]{2,6}", line))
+
+
+def is_requirement_level(line):
+    return line in REQUIREMENT_LEVELS
+
+
+def is_course_start(lines, idx):
+    if idx + 1 >= len(lines):
+        return False
+    if not any(ch.isalpha() for ch in lines[idx]):
+        return False
+    if not is_class_code(lines[idx + 1]):
+        return False
+    if lines[idx] in LOCATION_CODES or lines[idx] in COUNTRY_MARKERS:
+        return False
+    if lines[idx + 1] in LOCATION_CODES or lines[idx + 1] in COUNTRY_MARKERS:
+        return False
+    return True
+
+
+def looks_like_policy_line(line):
+    lowered = line.lower()
+    return (
+        line.endswith(".")
+        or lowered.startswith("we ")
+        or lowered.startswith("must ")
+        or lowered.startswith("if ")
+        or lowered.startswith("depending ")
+        or "accept" in lowered
+        or "applicant" in lowered
+        or "coursework" in lowered
+        or "prerequisite" in lowered
+        or "semester" in lowered
     )
-    text_extraction_example("output.pdf")
+
+
+def looks_like_school_line(line, school_started=False):
+    if is_class_code(line) or is_requirement_level(line) or line in LOCATION_CODES or line in COUNTRY_MARKERS:
+        return False
+
+    lowered = line.lower()
+    if school_started and re.match(r"^(of|at|and|the|de|du|des)\b", lowered):
+        return True
+
+    has_keyword = any(token in lowered for token in SCHOOL_NAME_KEYWORDS)
+    titleish = line[:1].isupper() and not line.endswith(".") and len(line) < 80
+    policy_lead = re.match(r"^(must|we|if|courses?|credit|online|pass|lab|prerequisite|depending)\b", lowered)
+
+    if has_keyword:
+        return True
+    if school_started and titleish and not policy_lead and not re.search(r"\d", line):
+        return True
+    return False
+
+
+def extract_school_from_page(lines, state_idx):
+    start = state_idx + 1
+    school_lines = []
+
+    for idx in range(start, min(start + 12, len(lines))):
+        line = lines[idx]
+        if is_course_start(lines, idx):
+            break
+        if looks_like_policy_line(line) and school_lines:
+            break
+        if looks_like_school_line(line, school_started=bool(school_lines)):
+            school_lines.append(line)
+            continue
+        if school_lines:
+            break
+
+    return " ".join(school_lines).strip(), len(school_lines)
+
+
+def parse_course_rows(lines, start_idx):
+    rows = []
+    leftover = []
+    idx = start_idx
+
+    while idx < len(lines):
+        if not is_course_start(lines, idx):
+            leftover.append(lines[idx])
+            idx += 1
+            continue
+
+        course_name = lines[idx]
+        class_code = lines[idx + 1]
+        cursor = idx + 2
+        requirement_level = "Unknown"
+
+        if cursor < len(lines) and is_requirement_level(lines[cursor]):
+            requirement_level = lines[cursor]
+            cursor += 1
+
+        notes = []
+        while cursor < len(lines) and not is_course_start(lines, cursor):
+            if lines[cursor] in LOCATION_CODES or lines[cursor] in COUNTRY_MARKERS:
+                break
+            if not is_noise_line(lines[cursor]):
+                notes.append(lines[cursor])
+            cursor += 1
+
+        credit_hours = None
+        compact_notes = []
+        for item in notes:
+            if credit_hours is None and re.fullmatch(r"\d+(?:\.\d+)?", item):
+                credit_hours = float(item) if "." in item else int(item)
+                continue
+            compact_notes.append(item)
+
+        markers = {
+            "yes": sum(1 for n in compact_notes if n == "Yes"),
+            "no": sum(1 for n in compact_notes if n == "No"),
+            "depends": sum(1 for n in compact_notes if n == "Depends"),
+        }
+
+        rows.append(
+            {
+                "course": course_name,
+                "class_code": class_code,
+                "required_or_recommended": requirement_level,
+                "credit_hours": credit_hours,
+                "markers": markers,
+                "notes": " ".join(compact_notes).strip(),
+                "raw_lines": compact_notes,
+            }
+        )
+        idx = cursor
+
+    return rows, leftover
+
+
+def parse_msar_prerequisites_by_school(pdf_path):
+    reader = PdfReader(pdf_path)
+    schools = {}
+    previous_school_slug = None
+
+    for page_num, page in enumerate(reader.pages, start=1):
+        raw_text = page.extract_text() or ""
+        lines = clean_page_lines(raw_text)
+        if not lines:
+            continue
+
+        state_idx = None
+        for idx, line in enumerate(lines[:50]):
+            if line in LOCATION_CODES:
+                state_idx = idx
+                break
+
+        if state_idx is None:
+            if previous_school_slug and previous_school_slug in schools:
+                schools[previous_school_slug]["page_notes"].append(
+                    {
+                        "page": page_num,
+                        "notes": " ".join(line for line in lines[:40] if not is_noise_line(line)).strip(),
+                    }
+                )
+            continue
+
+        state = lines[state_idx]
+        school_name, school_line_count = extract_school_from_page(lines, state_idx)
+
+        if not school_name and previous_school_slug:
+            school_slug = previous_school_slug
+            school_entry = schools[school_slug]
+        else:
+            school_slug = slugify_school_name(school_name)
+            dedupe_slug = school_slug
+            suffix = 2
+            while dedupe_slug in schools and schools[dedupe_slug]["school_name"] != school_name:
+                dedupe_slug = f"{school_slug}_{suffix}"
+                suffix += 1
+            school_slug = dedupe_slug
+
+            if school_slug not in schools:
+                schools[school_slug] = {
+                    "school_name": school_name,
+                    "state": state,
+                    "source_pages": [],
+                    "prerequisite_courses": [],
+                    "page_notes": [],
+                }
+            school_entry = schools[school_slug]
+
+        start_idx = state_idx + 1
+        if school_line_count > 0:
+            start_idx = state_idx + school_line_count + 1
+
+        rows, leftover = parse_course_rows(lines, start_idx)
+
+        school_entry["source_pages"].append(page_num)
+        school_entry["source_pages"] = sorted(set(school_entry["source_pages"]))
+        school_entry["prerequisite_courses"].extend(rows)
+
+        if leftover:
+            school_entry["page_notes"].append(
+                {
+                    "page": page_num,
+                    "notes": " ".join(line for line in leftover if not is_noise_line(line)).strip(),
+                }
+            )
+
+        previous_school_slug = school_slug
+
+    # Ensure deterministic key ordering in output.
+    ordered_slugs = sorted(schools.keys())
+    ordered = {slug: schools[slug] for slug in ordered_slugs}
+    return ordered
+
+
+def parse_msar_pdf_to_school_json(
+    input_pdf,
+    output_json,
+    normalized_pdf="output.pdf",
+    normalize_images=True,
+):
+    parse_source_pdf = input_pdf
+    if normalize_images:
+        replace_images_with_text_at_location(input_pdf=input_pdf, output_pdf=normalized_pdf)
+        parse_source_pdf = normalized_pdf
+
+    schools = parse_msar_prerequisites_by_school(parse_source_pdf)
+    payload = {
+        "metadata": {
+            "source_pdf": str(input_pdf),
+            "normalized_pdf": str(parse_source_pdf),
+            "parsed_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "total_schools": len(schools),
+            "required_scope": ["prerequisite_courses"],
+        },
+        "schools": schools,
+    }
+
+    with open(output_json, "w", encoding="utf-8") as fp:
+        json.dump(payload, fp, indent=2)
+
+    print(f"Wrote school-divided JSON to {output_json}")
+    print(f"Parsed {len(schools)} schools from {parse_source_pdf}")
+
+
+def build_arg_parser():
+    parser = argparse.ArgumentParser(
+        description="Parse MSAR PDF into school-keyed JSON requirements."
+    )
+    parser.add_argument(
+        "--input-pdf",
+        default="MSAR002 - MSAR Premed Course Requirements.pdf",
+        help="Path to source MSAR PDF.",
+    )
+    parser.add_argument(
+        "--normalized-pdf",
+        default="output.pdf",
+        help="Path for normalized PDF with image markers replaced.",
+    )
+    parser.add_argument(
+        "--output-json",
+        default="msar_requirements_by_school.json",
+        help="Destination JSON path.",
+    )
+    parser.add_argument(
+        "--skip-normalize",
+        action="store_true",
+        help="Skip image normalization and parse the input PDF directly.",
+    )
+    return parser
+
+
+if __name__ == '__main__':
+    args = build_arg_parser().parse_args()
+    parse_msar_pdf_to_school_json(
+        input_pdf=args.input_pdf,
+        output_json=args.output_json,
+        normalized_pdf=args.normalized_pdf,
+        normalize_images=not args.skip_normalize,
+    )
