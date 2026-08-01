@@ -324,37 +324,78 @@ def is_course_start(lines, idx):
 
 def looks_like_policy_line(line):
     lowered = line.lower()
-    return (
-        line.endswith(".")
-        or lowered.startswith("we ")
-        or lowered.startswith("must ")
-        or lowered.startswith("if ")
-        or lowered.startswith("depending ")
-        or "accept" in lowered
-        or "applicant" in lowered
-        or "coursework" in lowered
-        or "prerequisite" in lowered
-        or "semester" in lowered
-    )
+    if lowered.startswith("we ") or lowered.startswith("must ") or lowered.startswith("if "):
+        return True
+    if lowered.startswith("depending ") or "accept" in lowered or "applicant" in lowered:
+        return True
+    if "coursework" in lowered or "prerequisite" in lowered or "semester" in lowered:
+        return True
+
+    # Keep school fragments like "University in St." or "Louis School of" from
+    # being mistaken for policy text just because they end with a period.
+    if line.endswith(".") and len(line.split()) >= 4:
+        return True
+
+    return False
+
+
+def is_generic_school_heading(line):
+    lowered = re.sub(r"\s+", " ", line.strip().lower())
+    return lowered in {"medical school", "college of medicine", "college of medicine at the university of"}
 
 
 def looks_like_school_line(line, school_started=False):
     if is_class_code(line) or is_requirement_level(line) or line in LOCATION_CODES or line in COUNTRY_MARKERS:
         return False
+    if is_generic_school_heading(line):
+        return school_started
 
     lowered = line.lower()
+    if school_started and re.match(r"^[-\u2013]\s*[A-Z][A-Za-z .'-]*$", line):
+        return True
     if school_started and re.match(r"^(of|at|and|the|de|du|des)\b", lowered):
         return True
 
     has_keyword = any(token in lowered for token in SCHOOL_NAME_KEYWORDS)
-    titleish = line[:1].isupper() and not line.endswith(".") and len(line) < 80
-    policy_lead = re.match(r"^(must|we|if|courses?|credit|online|pass|lab|prerequisite|depending)\b", lowered)
+    titleish = line[:1].isupper() and len(line) < 80
+    policy_lead = re.match(
+        r"^(must|we|if|courses?|credit|online|pass|lab|prerequisite|depending|required|recommended|the record|admissions?)\b",
+        lowered,
+    )
 
     if has_keyword:
         return True
     if school_started and titleish and not policy_lead and not re.search(r"\d", line):
         return True
+    if not school_started and titleish and not line.endswith(".") and not policy_lead and not re.search(r"\d", line):
+        return True
     return False
+
+
+def looks_like_school_prefix_candidate(line):
+    """Allow title-case lead-in fragments before the line with school keywords.
+
+    Example: "Kirk Kerkorian" + "School of Medicine at UNLV"
+    """
+    if is_class_code(line) or is_requirement_level(line) or line in LOCATION_CODES or line in COUNTRY_MARKERS:
+        return False
+    if is_generic_school_heading(line):
+        return False
+
+    lowered = line.lower()
+    if re.match(r"^(must|we|if|courses?|credit|online|pass|lab|prerequisite|depending)\b", lowered):
+        return False
+
+    # Allow common name suffix punctuation (e.g., "Jr.") while still
+    # rejecting most sentence-like trailing periods.
+    allow_trailing_period = bool(re.search(r",\s*(jr|sr)\.$", lowered))
+
+    return (
+        line[:1].isupper()
+        and len(line) < 80
+        and not re.search(r"\d", line)
+        and (not line.endswith(".") or allow_trailing_period)
+    )
 
 
 def extract_school_from_page(lines, state_idx):
@@ -365,8 +406,17 @@ def extract_school_from_page(lines, state_idx):
         line = lines[idx]
         if is_course_start(lines, idx):
             break
-        if looks_like_policy_line(line) and school_lines:
+        if looks_like_policy_line(line) and school_lines and not looks_like_school_line(line, school_started=True):
             break
+
+        if not school_lines and looks_like_school_prefix_candidate(line):
+            # Keep a leading title-case fragment only when the next line clearly
+            # continues into a school identifier.
+            next_line = lines[idx + 1] if idx + 1 < len(lines) else ""
+            if looks_like_school_line(next_line, school_started=True):
+                school_lines.append(line)
+                continue
+
         if looks_like_school_line(line, school_started=bool(school_lines)):
             school_lines.append(line)
             continue
@@ -376,12 +426,13 @@ def extract_school_from_page(lines, state_idx):
     return " ".join(school_lines).strip(), len(school_lines)
 
 
-def parse_course_rows(lines, start_idx):
+def parse_course_rows(lines, start_idx, end_idx=None):
     rows = []
     leftover = []
     idx = start_idx
+    effective_end = len(lines) if end_idx is None else min(end_idx, len(lines))
 
-    while idx < len(lines):
+    while idx < effective_end:
         if not is_course_start(lines, idx):
             leftover.append(lines[idx])
             idx += 1
@@ -397,7 +448,7 @@ def parse_course_rows(lines, start_idx):
             cursor += 1
 
         notes = []
-        while cursor < len(lines) and not is_course_start(lines, cursor):
+        while cursor < effective_end and not is_course_start(lines, cursor):
             if lines[cursor] in LOCATION_CODES or lines[cursor] in COUNTRY_MARKERS:
                 break
             if not is_noise_line(lines[cursor]):
@@ -434,6 +485,18 @@ def parse_course_rows(lines, start_idx):
     return rows, leftover
 
 
+def find_page_section_starts(lines):
+    """Return indexes where a new school section begins on a page."""
+    starts = []
+    for idx, line in enumerate(lines):
+        if line not in LOCATION_CODES:
+            continue
+        school_name, _ = extract_school_from_page(lines, idx)
+        if school_name:
+            starts.append(idx)
+    return starts
+
+
 def parse_msar_prerequisites_by_school(pdf_path):
     reader = PdfReader(pdf_path)
     schools = {}
@@ -445,13 +508,9 @@ def parse_msar_prerequisites_by_school(pdf_path):
         if not lines:
             continue
 
-        state_idx = None
-        for idx, line in enumerate(lines[:50]):
-            if line in LOCATION_CODES:
-                state_idx = idx
-                break
+        section_starts = find_page_section_starts(lines)
 
-        if state_idx is None:
+        if not section_starts:
             if previous_school_slug and previous_school_slug in schools:
                 schools[previous_school_slug]["page_notes"].append(
                     {
@@ -461,13 +520,23 @@ def parse_msar_prerequisites_by_school(pdf_path):
                 )
             continue
 
-        state = lines[state_idx]
-        school_name, school_line_count = extract_school_from_page(lines, state_idx)
+        for section_pos, state_idx in enumerate(section_starts):
+            section_end = section_starts[section_pos + 1] if section_pos + 1 < len(section_starts) else len(lines)
+            state = lines[state_idx]
+            school_name, school_line_count = extract_school_from_page(lines, state_idx)
 
-        if not school_name and previous_school_slug:
-            school_slug = previous_school_slug
-            school_entry = schools[school_slug]
-        else:
+            if not school_name:
+                if previous_school_slug and previous_school_slug in schools:
+                    schools[previous_school_slug]["page_notes"].append(
+                        {
+                            "page": page_num,
+                            "notes": " ".join(
+                                line for line in lines[state_idx:section_end] if not is_noise_line(line)
+                            ).strip(),
+                        }
+                    )
+                continue
+
             school_slug = slugify_school_name(school_name)
             dedupe_slug = school_slug
             suffix = 2
@@ -486,25 +555,25 @@ def parse_msar_prerequisites_by_school(pdf_path):
                 }
             school_entry = schools[school_slug]
 
-        start_idx = state_idx + 1
-        if school_line_count > 0:
-            start_idx = state_idx + school_line_count + 1
+            start_idx = state_idx + 1
+            if school_line_count > 0:
+                start_idx = state_idx + school_line_count + 1
 
-        rows, leftover = parse_course_rows(lines, start_idx)
+            rows, leftover = parse_course_rows(lines, start_idx, end_idx=section_end)
 
-        school_entry["source_pages"].append(page_num)
-        school_entry["source_pages"] = sorted(set(school_entry["source_pages"]))
-        school_entry["prerequisite_courses"].extend(rows)
+            school_entry["source_pages"].append(page_num)
+            school_entry["source_pages"] = sorted(set(school_entry["source_pages"]))
+            school_entry["prerequisite_courses"].extend(rows)
 
-        if leftover:
-            school_entry["page_notes"].append(
-                {
-                    "page": page_num,
-                    "notes": " ".join(line for line in leftover if not is_noise_line(line)).strip(),
-                }
-            )
+            if leftover:
+                school_entry["page_notes"].append(
+                    {
+                        "page": page_num,
+                        "notes": " ".join(line for line in leftover if not is_noise_line(line)).strip(),
+                    }
+                )
 
-        previous_school_slug = school_slug
+            previous_school_slug = school_slug
 
     # Ensure deterministic key ordering in output.
     ordered_slugs = sorted(schools.keys())

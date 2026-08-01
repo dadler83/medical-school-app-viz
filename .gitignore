@@ -1,3 +1,6 @@
 build
 *.egg-info
 venv
+__pychache__/
+*.py[cod]
+*.so
