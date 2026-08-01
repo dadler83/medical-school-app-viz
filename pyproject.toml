@@ -9,4 +9,6 @@ description = "PDF parsing and image-to-text replacement utilities for medical s
 requires-python = ">=3.9"
 dependencies = [
     "PyPDF2>=3.0.0",
+    "requests>=2.34.2",
+    # bs4, pandas
 ]

@@ -412,11 +412,11 @@ def parse_course_rows(lines, start_idx):
                 continue
             compact_notes.append(item)
 
-        markers = {
-            "yes": sum(1 for n in compact_notes if n == "Yes"),
-            "no": sum(1 for n in compact_notes if n == "No"),
-            "depends": sum(1 for n in compact_notes if n == "Depends"),
-        }
+        # markers = {
+        #     "yes": sum(1 for n in compact_notes if n == "Yes"),
+        #     "no": sum(1 for n in compact_notes if n == "No"),
+        #     "depends": sum(1 for n in compact_notes if n == "Depends"),
+        # }
 
         rows.append(
             {
@@ -424,7 +424,7 @@ def parse_course_rows(lines, start_idx):
                 "class_code": class_code,
                 "required_or_recommended": requirement_level,
                 "credit_hours": credit_hours,
-                "markers": markers,
+                # "markers": markers,
                 "notes": " ".join(compact_notes).strip(),
                 "raw_lines": compact_notes,
             }
