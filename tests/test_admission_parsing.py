@@ -1,6 +1,6 @@
 import unittest
 
-from admissionParsing import extract_school_from_page, find_page_section_starts, parse_course_rows
+from admission_parsing import extract_school_from_page, find_page_section_starts, parse_course_rows
 
 
 class TestSchoolNameParsing(unittest.TestCase):
