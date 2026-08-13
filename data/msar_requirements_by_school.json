@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "source_pdf": "MSAR002 - MSAR Premed Course Requirements.pdf",
-    "normalized_pdf": "output.pdf",
-    "parsed_at_utc": "2026-08-01T15:35:29Z",
+    "source_pdf": "/home/dadler83/Desktop/medical-school-app-viz/data/MSAR002 - MSAR Premed Course Requirements.pdf",
+    "normalized_pdf": "/home/dadler83/Desktop/medical-school-app-viz/data/output.pdf",
+    "parsed_at_utc": "2026-08-13T02:12:58Z",
     "total_schools": 181,
     "required_scope": [
       "prerequisite_courses"

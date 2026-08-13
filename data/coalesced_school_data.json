@@ -1,11 +1,11 @@
 {
   "metadata": {
-    "generated_at_utc": "2026-08-06T21:54:14Z",
+    "generated_at_utc": "2026-08-13T02:12:58Z",
     "sources": {
-      "deadlines": "app_deadlines_by_school.json",
-      "msar": "msar_requirements_by_school.json",
-      "md_stats_csv": "2025_FACTS_Table_matriculants.csv",
-      "md_phd_stats_csv": "2025_FACTS_Table_md_phd.csv"
+      "deadlines": "/home/dadler83/Desktop/medical-school-app-viz/data/app_deadlines_by_school.json",
+      "msar": "/home/dadler83/Desktop/medical-school-app-viz/data/msar_requirements_by_school.json",
+      "md_stats_csv": "/home/dadler83/Desktop/medical-school-app-viz/data/2025_FACTS_Table_matriculants.csv",
+      "md_phd_stats_csv": "/home/dadler83/Desktop/medical-school-app-viz/data/2025_FACTS_Table_md_phd.csv"
     },
     "total_schools_in_output": 181,
     "matched_schools": 164,
