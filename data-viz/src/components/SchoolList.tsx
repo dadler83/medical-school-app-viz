@@ -29,8 +29,8 @@ export default function SchoolList({ regionName, schools, profile, onClose }: Pr
         <p className="no-results">No eligible schools found in this region.</p>
       )}
       <ul className="school-cards">
-        {eligible.map((s, i) => (
-          <li key={i} className="school-card">
+        {eligible.map((s) => (
+          <li key={s.school_name} className="school-card">
             <h3>{s.school_name}</h3>
             <div className="school-meta">
               <span>Deadline: {s.application.application_deadline || "N/A"}</span>
@@ -45,8 +45,8 @@ export default function SchoolList({ regionName, schools, profile, onClose }: Pr
               <div className="prereqs">
                 <strong>Prerequisites:</strong>
                 <ul>
-                  {s.msar.prerequisite_courses.map((c, j) => (
-                    <li key={j} className={c.required_or_recommended === "Required" ? "required" : "recommended"}>
+                  {s.msar.prerequisite_courses.map((c) => (
+                    <li key={`${c.class_code}-${c.required_or_recommended}`} className={c.required_or_recommended === "Required" ? "required" : "recommended"}>
                       {c.course} ({c.class_code}) – {c.credit_hours} hrs – {c.required_or_recommended}
                     </li>
                   ))}

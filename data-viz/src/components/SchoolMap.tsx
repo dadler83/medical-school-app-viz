@@ -30,6 +30,7 @@ export default function SchoolMap({ profile, onRegionClick }: Props) {
   const [schoolData, setSchoolData] = useState<SchoolData | null>(null);
   const [usGeo, setUsGeo] = useState<GeoJsonObject | null>(null);
   const [caGeo, setCaGeo] = useState<GeoJsonObject | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -40,6 +41,8 @@ export default function SchoolMap({ profile, onRegionClick }: Props) {
       setSchoolData(sd);
       setUsGeo(us);
       setCaGeo(ca);
+    }).catch((err) => {
+      setLoadError(`Failed to load map data: ${err instanceof Error ? err.message : String(err)}`);
     });
   }, []);
 
@@ -104,6 +107,10 @@ export default function SchoolMap({ profile, onRegionClick }: Props) {
       },
     });
   };
+
+  if (loadError) {
+    return <div className="map-loading">{loadError}</div>;
+  }
 
   if (!usGeo || !caGeo) {
     return <div className="map-loading">Loading map…</div>;
