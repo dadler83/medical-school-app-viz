@@ -2,7 +2,8 @@ export interface PrerequisiteCourse {
   course: string;
   class_code: string;
   required_or_recommended: "Required" | "Recommended";
-  credit_hours: number;
+  credit_hours: number | null;
+  credit_hours_inferred?: boolean;
   notes: string;
 }
 
@@ -50,7 +51,7 @@ export interface SchoolData {
 }
 
 export interface CandidateProfile {
-  coursesTaken: Set<string>;
+  semestersBySubject: Record<string, number>;
   gpa: number | null;
 }
 

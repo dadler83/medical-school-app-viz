@@ -35,6 +35,34 @@ HEADER_EXACT = {
 }
 
 REQUIREMENT_LEVELS = {"Required", "Recommended"}
+NUMBER_WORDS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+}
+NUMBER_PATTERN = r"(?:\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"
+NUMBER_WITH_OPTIONAL_DIGIT = rf"{NUMBER_PATTERN}(?:\s*\(\s*\d+(?:\.\d+)?\s*\))?"
+CREDIT_HOURS_PATTERN = re.compile(
+    rf"\b(?P<value>{NUMBER_PATTERN})(?:\s*\(\s*\d+(?:\.\d+)?\s*\))?\s*(?:(?:semester|college)\s+)?(?:credit[- ]hours?|semester[- ]hours?)\b",
+    re.IGNORECASE,
+)
+DURATION_PATTERN = re.compile(
+    rf"\b(?P<value>{NUMBER_PATTERN})(?:\s*\(\s*\d+(?:\.\d+)?\s*\))?\s*(?:-\s*)?(?:(?:full|academic|school)\s+)?(?P<unit>years?|semesters?)\b",
+    re.IGNORECASE,
+)
+DURATION_RANGE_PATTERN = re.compile(
+    rf"\b{NUMBER_WITH_OPTIONAL_DIGIT}\s*(?:-|to|or)\s*{NUMBER_WITH_OPTIONAL_DIGIT}\s*(?:(?:full|academic|school)\s+)?(?:years?|semesters?)\b",
+    re.IGNORECASE,
+)
 SCHOOL_NAME_KEYWORDS = {
     "school", "college", "university", "medicine", "medical", "health",
     "sciences", "institute", "program", "faculty", "campus",
@@ -456,12 +484,49 @@ def parse_course_rows(lines, start_idx, end_idx=None):
             cursor += 1
 
         credit_hours = None
+        credit_hours_inferred = False
         compact_notes = []
-        for item in notes:
-            if credit_hours is None and re.fullmatch(r"\d+(?:\.\d+)?", item):
-                credit_hours = float(item) if "." in item else int(item)
-                continue
-            compact_notes.append(item)
+        numeric_candidates = []
+        for note_idx, item in enumerate(notes):
+            if re.fullmatch(r"\d+(?:\.\d+)?", item):
+                value = float(item) if "." in item else int(item)
+                numeric_candidates.append((note_idx, value))
+            else:
+                compact_notes.append(item)
+
+        if numeric_candidates:
+            # PDF text order may place course sequence numbers before the
+            # credit-hours column; the column value is the last standalone number.
+            credit_hours_idx, credit_hours = numeric_candidates[-1]
+            compact_notes = [
+                item for note_idx, item in enumerate(notes)
+                if note_idx != credit_hours_idx
+            ]
+
+        if credit_hours is None:
+            note_text = " ".join(notes)
+            explicit_match = CREDIT_HOURS_PATTERN.search(note_text)
+            if explicit_match:
+                value = explicit_match.group("value").lower()
+                credit_hours = NUMBER_WORDS.get(
+                    value,
+                    float(value) if value[0].isdigit() else None,
+                )
+            elif not DURATION_RANGE_PATTERN.search(note_text):
+                duration_match = DURATION_PATTERN.search(note_text)
+                if duration_match:
+                    value = duration_match.group("value").lower()
+                    unit = duration_match.group("unit").lower()
+                    amount = NUMBER_WORDS.get(
+                        value,
+                        float(value) if value[0].isdigit() else None,
+                    )
+                    maximum_duration = 5 if unit.startswith("year") else 12
+                    if amount is not None and 0 < amount <= maximum_duration:
+                        credit_hours = amount * (8 if unit.startswith("year") else 4)
+                        if isinstance(credit_hours, float) and credit_hours.is_integer():
+                            credit_hours = int(credit_hours)
+                        credit_hours_inferred = True
 
         # markers = {
         #     "yes": sum(1 for n in compact_notes if n == "Yes"),
@@ -475,6 +540,7 @@ def parse_course_rows(lines, start_idx, end_idx=None):
                 "class_code": class_code,
                 "required_or_recommended": requirement_level,
                 "credit_hours": credit_hours,
+                "credit_hours_inferred": credit_hours_inferred,
                 # "markers": markers,
                 "notes": " ".join(compact_notes).strip(),
                 "raw_lines": compact_notes,

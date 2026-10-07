@@ -41,4 +41,6 @@ done
   --output-json "$COALESCED_JSON" \
   --report-json "$COALESCE_REPORT"
 
+cp "$COALESCED_JSON" "$ROOT_DIR/data-viz/public/coalesced_school_data.json"
+
 echo "Wrote outputs to $DATA_DIR"

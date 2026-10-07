@@ -10,11 +10,15 @@ interface Props {
 export default function CandidateForm({ profile, onChange }: Props) {
   const [gpaInput, setGpaInput] = useState("");
 
-  const toggleCourse = (code: string) => {
-    const next = new Set(profile.coursesTaken);
-    if (next.has(code)) next.delete(code);
-    else next.add(code);
-    onChange({ ...profile, coursesTaken: next });
+  const handleSemesters = (code: string, value: string) => {
+    const semesters = value === "" ? 0 : Number(value);
+    onChange({
+      ...profile,
+      semestersBySubject: {
+        ...profile.semestersBySubject,
+        [code]: Number.isFinite(semesters) ? Math.max(0, semesters) : 0,
+      },
+    });
   };
 
   const handleGpa = (val: string) => {
@@ -30,17 +34,25 @@ export default function CandidateForm({ profile, onChange }: Props) {
     <div className="candidate-form">
       <h2>Your Profile</h2>
       <div className="form-section">
-        <label>Courses Completed</label>
-        <div className="course-checkboxes">
+        <label>Semesters completed by subject</label>
+        <p className="form-help">Enter your completed semesters. Each semester is estimated as 4 credit hours.</p>
+        <div className="semester-inputs">
           {COURSE_OPTIONS.map((c) => (
-            <label key={c.code} className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={profile.coursesTaken.has(c.code)}
-                onChange={() => toggleCourse(c.code)}
-              />
-              {c.label} ({c.code})
-            </label>
+            <div key={c.code} className="semester-row">
+              <label htmlFor={`semesters-${c.code}`}>{c.label}</label>
+              <div className="semester-control">
+                <input
+                  id={`semesters-${c.code}`}
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  placeholder="0"
+                  value={profile.semestersBySubject[c.code] || ""}
+                  onChange={(e) => handleSemesters(c.code, e.target.value)}
+                />
+                <span>semesters</span>
+              </div>
+            </div>
           ))}
         </div>
       </div>
